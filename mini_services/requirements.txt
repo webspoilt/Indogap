@@ -1,0 +1,28 @@
+# Mini Services - AI-Powered Opportunity Discovery Engine
+# Core Dependencies
+
+# Configuration
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# HTTP & Web Scraping
+httpx>=0.24.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+tenacity>=8.2.0
+
+# NLP & ML
+nltk>=3.8.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+
+# LLM APIs
+openai>=1.0.0
+requests>=2.31.0
+
+# Optional dependencies (for advanced features)
+# Uncomment as needed:
+# spacy>=3.6.0  # For noun phrase extraction
+# redis>=4.0.0  # For caching
+# sqlalchemy>=2.0.0  # For PostgreSQL
+# pgvector>=0.2.0  # For vector database
