@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Opportunity {
+  id                  String   @id @default(uuid())
+  title               String
+  description         String
+  globalSource        String
+  globalReference     String
+  successScore        Int
+  status              String   @default("New")
+  indianCompetitors   String?
+  gapAnalysis         String?
+  culturalFit         Int?
+  logisticsComplexity Int?
+  paymentReadiness    Int?
+  timingAlignment     Int?
+  monopolyPotential   Int?
+  regulatoryRisk      Int?
+  executionFeasibility Int?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  globalStartupId     String?
+  globalStartup       IndianStartup? @relation(fields: [globalStartupId], references: [id])
+  roadmaps            Roadmap[]
+}
+
+model IndianStartup {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  category    String
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  opportunities Opportunity[]
+}
+
+model Roadmap {
+  id              String   @id @default(uuid())
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id])
+  title           String
+  targetMarket    String
+  pricingStrategy String
+  channels        Json
+  techStack       Json
+  milestones      Json
+  timeline        String
+  createdAt       DateTime @default(now())
+}
