@@ -118,7 +118,7 @@ export default function OpportunityEngine() {
 
   const filteredOpportunities = opportunities.filter(opp => {
     const matchesSearch = opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         opp.description.toLowerCase().includes(searchTerm.toLowerCase())
+      opp.description.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesSource = filterSource === 'all' || opp.globalSource === filterSource
     const matchesStatus = filterStatus === 'all' || opp.status === filterStatus
     const matchesScore = opp.successScore >= filterMinScore
@@ -306,7 +306,7 @@ export default function OpportunityEngine() {
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50">
                   Opportunity Discovery Engine
                 </h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
                   AI-Powered Market Intelligence for India
                 </p>
               </div>
@@ -354,17 +354,17 @@ export default function OpportunityEngine() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6" role="main" aria-label="Main content">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Opportunities</CardTitle>
-              <BarChart3 className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+              <BarChart3 className="h-4 w-4 text-slate-700 dark:text-slate-300" aria-hidden="true" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                 Discovered opportunities
               </p>
             </CardContent>
@@ -377,7 +377,7 @@ export default function OpportunityEngine() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.highPotential}</div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                 Score ≥ 75%
               </p>
             </CardContent>
@@ -392,7 +392,7 @@ export default function OpportunityEngine() {
               <div className={`text-2xl font-bold ${getScoreColor(stats.avgScore)}`}>
                 {stats.avgScore}%
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                 Success probability
               </p>
             </CardContent>
@@ -405,7 +405,7 @@ export default function OpportunityEngine() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{indianStartups.length}</div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                 In knowledge graph
               </p>
             </CardContent>
@@ -537,7 +537,7 @@ export default function OpportunityEngine() {
                         <div className={`text-2xl font-bold ${getScoreColor(opportunity.successScore)}`}>
                           {opportunity.successScore}%
                         </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                        <div className="text-xs text-slate-700 dark:text-slate-300">
                           Success Score
                         </div>
                       </div>
@@ -545,7 +545,7 @@ export default function OpportunityEngine() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="flex items-center gap-4 text-sm text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-1">
                           <Globe className="w-4 h-4" />
                           <span>{opportunity.globalReference}</span>
@@ -679,7 +679,7 @@ export default function OpportunityEngine() {
                       <Lightbulb className="w-8 h-8 text-emerald-600" />
                     </div>
                     <h3 className="text-lg font-semibold mb-2">Select an Opportunity</h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+                    <p className="text-slate-700 dark:text-slate-300 mb-4 max-w-md mx-auto">
                       Choose an opportunity from the Opportunities tab to generate a comprehensive MVP roadmap tailored for the Indian market.
                     </p>
                     <Button onClick={() => setActiveTab('opportunities')}>
@@ -876,11 +876,11 @@ export default function OpportunityEngine() {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <Target className="w-4 h-4 text-white" />
               </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="text-sm text-slate-700 dark:text-slate-300">
                 Opportunity Discovery Engine © 2025
               </span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300">
               <span className="flex items-center gap-1">
                 <TrendingUp className="w-4 h-4" />
                 {stats.total} opportunities discovered
