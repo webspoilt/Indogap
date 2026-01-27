@@ -12,6 +12,7 @@ import argparse
 import logging
 import sys
 import json
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -37,6 +38,19 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def safe_get_dimension_score(opp: Dict, dimension_name: str) -> str:
+    """Safely get a dimension score from an opportunity."""
+    try:
+        scores = opp.get('scores')
+        if scores and hasattr(scores, 'dimensions') and scores.dimensions:
+            dim = scores.dimensions.get(dimension_name)
+            if dim and hasattr(dim, 'score'):
+                return str(dim.score)
+    except (AttributeError, KeyError, TypeError):
+        pass
+    return 'N/A'
 
 
 def run_demo():
@@ -473,8 +487,6 @@ def run_demo():
     # Export to CSV
     csv_path = output_dir / f"opportunity_analysis_{timestamp}.csv"
     
-    import pandas as pd
-    
     rows = []
     for opp in opportunities:
         yc = opp['yc_company']
@@ -488,9 +500,9 @@ def run_demo():
             'Similarity Score': opp['similarity_score'],
             'Gap Score': opp['gap_score'],
             'Opportunity Level': opp['opportunity_level'],
-            'Cultural Fit': opp['scores'].dimensions.get('cultural_fit', {}).score if opp['scores'] and opp['scores'].dimensions else 'N/A',
-            'Payment Readiness': opp['scores'].dimensions.get('payment_readiness', {}).score if opp['scores'] and opp['scores'].dimensions else 'N/A',
-            'Execution Feasibility': opp['scores'].dimensions.get('execution_feasibility', {}).score if opp['scores'] and opp['scores'].dimensions else 'N/A',
+            'Cultural Fit': safe_get_dimension_score(opp, 'cultural_fit'),
+            'Payment Readiness': safe_get_dimension_score(opp, 'payment_readiness'),
+            'Execution Feasibility': safe_get_dimension_score(opp, 'execution_feasibility'),
         })
     
     df = pd.DataFrame(rows)

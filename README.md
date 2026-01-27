@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776ab?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-14+-black?logo=next.js&logoColor=white)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-15+-black?logo=next.js&logoColor=white)](https://nextjs.org)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20AI-orange?logo=ollama&logoColor=white)](https://ollama.ai)
 
 **The First Local-First, Privacy-Focused Market Gap Discovery Engine for the Indian Startup Ecosystem**
@@ -56,7 +56,7 @@ SCRAPE (YC + PH) → ANALYZE (Local AI) → IDENTIFY (Gaps) → BUILD (MVP)
 | `deepseek-coder:6.7b` | ~4GB | Code generation |
 
 ### Frontend
-- **Next.js 14** — React framework
+- **Next.js 15** — React framework
 - **TailwindCSS** — Styling
 - **Shadcn/UI** — Component library
 - **TypeScript** — Type safety

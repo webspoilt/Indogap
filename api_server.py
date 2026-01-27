@@ -53,10 +53,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS
+# CORS - Configure allowed origins from environment or use localhost for development
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -129,7 +137,7 @@ async def health_check():
     # Get system stats
     ram = psutil.virtual_memory()
     gpus = GPUtil.getGPUs()
-    vram = gpus[0].memoryUsed / 1024 if gpus else None
+    vram = (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None
     
     return HealthResponse(
         status="healthy" if ollama_available else "degraded",
@@ -152,8 +160,8 @@ async def get_system_stats():
         "ram_percent": ram.percent,
         "ram_used_gb": ram.used / (1024**3),
         "ram_total_gb": ram.total / (1024**3),
-        "vram_used_gb": gpus[0].memoryUsed / 1024 if gpus else None,
-        "vram_total_gb": gpus[0].memoryTotal / 1024 if gpus else None,
+        "vram_used_gb": (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None,
+        "vram_total_gb": (gpus[0].memoryTotal / 1024) if len(gpus) > 0 else None,
         "models_loaded": [],
         "timestamp": datetime.now().isoformat()
     }
