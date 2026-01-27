@@ -52,13 +52,28 @@ free_api = get_free_api_client()
 
 # Admin Authentication Config
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "indogap2024")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    logger.warning("⚠️ ADMIN_PASSWORD not set! Using default 'indogap2024'. Set ADMIN_PASSWORD env var for production!")
+    ADMIN_PASSWORD = "indogap2024"
 JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
 JWT_EXPIRY = 3600 * 24  # 24 hours
 
 # Simple token storage (in production, use Redis or database)
 active_tokens: Dict[str, Dict[str, Any]] = {}
 security = HTTPBearer(auto_error=False)
+
+def cleanup_expired_tokens():
+    """Remove expired tokens from memory"""
+    current_time = time.time()
+    expired = [
+        token for token, data in active_tokens.items()
+        if data["expires_at"] < current_time
+    ]
+    for token in expired:
+        del active_tokens[token]
+    if expired:
+        logger.info(f"Cleaned up {len(expired)} expired tokens")
 
 def create_token(username: str) -> str:
     """Create a simple JWT-like token"""
@@ -139,6 +154,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Background task for token cleanup
+async def token_cleanup_task():
+    """Periodically clean up expired tokens"""
+    while True:
+        await asyncio.sleep(3600)  # Every hour
+        cleanup_expired_tokens()
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on app startup"""
+    asyncio.create_task(token_cleanup_task())
+    logger.info("Started token cleanup background task")
 
 # Pydantic models for API
 class HealthResponse(BaseModel):
@@ -464,7 +492,7 @@ async def run_demo_analysis(background_tasks: BackgroundTasks):
     
     # Store in repository
     for opp in opportunities:
-        repository.store_opportunity(opp)
+        await repository.store_opportunity(opp)
     
     return {
         "success": True,
