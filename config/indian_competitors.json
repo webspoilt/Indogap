@@ -1,0 +1,103 @@
+{
+    "default": "Major Indian startups: Razorpay, Freshworks, Zoho, Byjus, Practo",
+    "categories": {
+        "fintech": {
+            "competitors": [
+                "Razorpay",
+                "CRED",
+                "Zerodha",
+                "Paytm",
+                "PhonePe",
+                "PolicyBazaar"
+            ],
+            "description": "Leading Indian fintech and payments companies"
+        },
+        "saas": {
+            "competitors": [
+                "Freshworks",
+                "Zoho",
+                "BrowserStack",
+                "Chargebee",
+                "Postman"
+            ],
+            "description": "Major Indian SaaS and B2B software companies"
+        },
+        "edtech": {
+            "competitors": [
+                "Byjus",
+                "Unacademy",
+                "Vedantu",
+                "upGrad",
+                "Physics Wallah"
+            ],
+            "description": "Leading Indian EdTech platforms"
+        },
+        "healthtech": {
+            "competitors": [
+                "Practo",
+                "PharmEasy",
+                "1mg",
+                "Netmeds",
+                "Cult.fit"
+            ],
+            "description": "Major Indian healthcare and wellness startups"
+        },
+        "ecommerce": {
+            "competitors": [
+                "Flipkart",
+                "Myntra",
+                "Nykaa",
+                "Meesho",
+                "Udaan"
+            ],
+            "description": "Leading Indian e-commerce platforms"
+        },
+        "food_delivery": {
+            "competitors": [
+                "Swiggy",
+                "Zomato",
+                "Blinkit",
+                "Dunzo",
+                "BigBasket"
+            ],
+            "description": "Food delivery and quick commerce"
+        },
+        "mobility": {
+            "competitors": [
+                "Ola",
+                "Rapido",
+                "Bounce",
+                "Yulu"
+            ],
+            "description": "Transportation and mobility startups"
+        },
+        "agritech": {
+            "competitors": [
+                "AgroStar",
+                "Bijak",
+                "DeHaat",
+                "Ninjacart",
+                "CropIn"
+            ],
+            "description": "Agriculture technology companies"
+        },
+        "ai": {
+            "competitors": [
+                "Freshworks AI",
+                "Haptik",
+                "Yellow.ai",
+                "Sarvam AI"
+            ],
+            "description": "AI and ML-focused Indian startups"
+        },
+        "devtools": {
+            "competitors": [
+                "BrowserStack",
+                "Postman",
+                "Hasura",
+                "InfraCloud"
+            ],
+            "description": "Developer tools and infrastructure"
+        }
+    }
+}

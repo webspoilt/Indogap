@@ -46,6 +46,33 @@ repository = get_repository()
 ollama = get_ollama_client()
 free_api = get_free_api_client()
 
+# Load Indian competitors config
+COMPETITORS_CONFIG_PATH = Path(__file__).parent / "config" / "indian_competitors.json"
+
+def get_indian_competitors(tags: List[str] = None) -> str:
+    """Load Indian competitors from config file with category matching."""
+    try:
+        if COMPETITORS_CONFIG_PATH.exists():
+            with open(COMPETITORS_CONFIG_PATH, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            
+            # Try to match by category based on tags
+            if tags and "categories" in config:
+                tag_lower = [t.lower() for t in tags]
+                for category, data in config["categories"].items():
+                    if category.lower() in tag_lower or any(cat in " ".join(tag_lower) for cat in [category]):
+                        competitors = data.get("competitors", [])
+                        desc = data.get("description", "Indian startups")
+                        return f"{desc}: {', '.join(competitors)}"
+            
+            # Return default
+            return config.get("default", "Major Indian startups in this space")
+    except Exception as e:
+        logger.warning(f"Failed to load competitors config: {e}")
+    
+    # Fallback
+    return "Major Indian startups: Razorpay, Freshworks, Zoho, Byjus, Practo"
+
 # Create FastAPI app
 app = FastAPI(
     title="IndoGap AI Engine",
@@ -249,8 +276,8 @@ async def scrape_data(request: ScrapeRequest):
 async def analyze_startup(request: AnalysisRequest):
     """Analyze a startup opportunity using local AI"""
     try:
-        # Get Indian competitors (mock for demo)
-        indian_competitors = "Major Indian startups in this space: Razorpay, Freshworks, Zoho, Byjus, Practo"
+        # Get Indian competitors from config file
+        indian_competitors = get_indian_competitors(request.tags)
         
         # Use local Ollama for analysis
         result = ollama.analyze_opportunity(
