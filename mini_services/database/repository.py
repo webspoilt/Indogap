@@ -150,6 +150,69 @@ class PostgreSQLRepository:
         finally:
             session.close()
 
+    async def get_all_global_startups(self) -> List[Dict[str, Any]]:
+        """Get all global startups (YC, Product Hunt)"""
+        session = self.Session()
+        try:
+            startups = session.query(GlobalStartupModel).order_by(GlobalStartupModel.created_at.desc()).all()
+            return [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "description": s.description,
+                    "short_description": s.short_description,
+                    "tags": s.tags,
+                    "website": s.website,
+                    "source": s.source,
+                    "batch": s.batch,
+                    "funding_stage": s.funding_stage,
+                    "analyzed": s.analyzed,
+                    "created_at": s.created_at.isoformat() if s.created_at else None
+                }
+                for s in startups
+            ]
+        finally:
+            session.close()
+
+    async def get_all_indian_startups(self) -> List[Dict[str, Any]]:
+        """Get all Indian startups"""
+        session = self.Session()
+        try:
+            startups = session.query(IndianStartupModel).order_by(IndianStartupModel.created_at.desc()).all()
+            return [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "description": s.description,
+                    "category": s.category,
+                    "tags": s.tags,
+                    "website": s.website,
+                    "headquarters": s.headquarters,
+                    "status": s.status,
+                    "created_at": s.created_at.isoformat() if s.created_at else None
+                }
+                for s in startups
+            ]
+        finally:
+            session.close()
+
+    async def delete_opportunity(self, opportunity_id: str) -> bool:
+        """Delete an opportunity by ID"""
+        session = self.Session()
+        try:
+            opp = session.query(OpportunityModel).filter_by(id=opportunity_id).first()
+            if opp:
+                session.delete(opp)
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error deleting opportunity: {e}")
+            raise
+        finally:
+            session.close()
+
 
 class InMemoryRepository:
     """
@@ -157,6 +220,8 @@ class InMemoryRepository:
     """
     def __init__(self):
         self.opportunities: List[Dict[str, Any]] = []
+        self.global_startups: List[Dict[str, Any]] = []
+        self.indian_startups: List[Dict[str, Any]] = []
     
     async def store_opportunity(self, opportunity: Dict[str, Any]) -> None:
         """Store an opportunity in memory"""
@@ -165,6 +230,22 @@ class InMemoryRepository:
     async def get_all_opportunities(self) -> List[Dict[str, Any]]:
         """Get all stored opportunities"""
         return self.opportunities
+
+    async def get_all_global_startups(self) -> List[Dict[str, Any]]:
+        """Get all global startups"""
+        return self.global_startups
+
+    async def get_all_indian_startups(self) -> List[Dict[str, Any]]:
+        """Get all Indian startups"""
+        return self.indian_startups
+
+    async def delete_opportunity(self, opportunity_id: str) -> bool:
+        """Delete an opportunity by ID"""
+        for i, opp in enumerate(self.opportunities):
+            if opp.get("id") == opportunity_id:
+                del self.opportunities[i]
+                return True
+        return False
 
 
 # Singleton instance for the application

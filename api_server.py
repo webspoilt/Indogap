@@ -14,13 +14,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from uuid import uuid4
 import uvicorn
+import hashlib
+import secrets
+import time
 
 # Setup logging
 logging.basicConfig(
@@ -45,6 +49,45 @@ settings = get_settings()
 repository = get_repository()
 ollama = get_ollama_client()
 free_api = get_free_api_client()
+
+# Admin Authentication Config
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "indogap2024")
+JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
+JWT_EXPIRY = 3600 * 24  # 24 hours
+
+# Simple token storage (in production, use Redis or database)
+active_tokens: Dict[str, Dict[str, Any]] = {}
+security = HTTPBearer(auto_error=False)
+
+def create_token(username: str) -> str:
+    """Create a simple JWT-like token"""
+    token = secrets.token_urlsafe(32)
+    active_tokens[token] = {
+        "username": username,
+        "created_at": time.time(),
+        "expires_at": time.time() + JWT_EXPIRY
+    }
+    return token
+
+def verify_token(token: str) -> Optional[Dict[str, Any]]:
+    """Verify token and return user info"""
+    if token in active_tokens:
+        token_data = active_tokens[token]
+        if token_data["expires_at"] > time.time():
+            return token_data
+        else:
+            del active_tokens[token]
+    return None
+
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """Dependency to verify admin authentication"""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token_data = verify_token(credentials.credentials)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return token_data
 
 # Load Indian competitors config
 COMPETITORS_CONFIG_PATH = Path(__file__).parent / "config" / "indian_competitors.json"
@@ -143,6 +186,51 @@ class SystemStats(BaseModel):
     vram_used_gb: Optional[float]
     vram_total_gb: Optional[float]
     models_loaded: List[str]
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    token: Optional[str] = None
+    message: str
+    username: Optional[str] = None
+
+
+# ============== AUTH ENDPOINTS ==============
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """Admin login endpoint"""
+    if request.username == ADMIN_USERNAME and request.password == ADMIN_PASSWORD:
+        token = create_token(request.username)
+        logger.info(f"Admin login successful: {request.username}")
+        return LoginResponse(
+            success=True,
+            token=token,
+            message="Login successful",
+            username=request.username
+        )
+    logger.warning(f"Failed login attempt for: {request.username}")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@app.post("/api/auth/logout")
+async def logout(admin: Dict = Depends(get_current_admin)):
+    """Admin logout endpoint"""
+    # Remove all tokens for this user
+    tokens_to_remove = [
+        token for token, data in active_tokens.items()
+        if data.get("username") == admin.get("username")
+    ]
+    for token in tokens_to_remove:
+        del active_tokens[token]
+    return {"success": True, "message": "Logged out successfully"}
+
+@app.get("/api/auth/verify")
+async def verify_auth(admin: Dict = Depends(get_current_admin)):
+    """Verify if current token is valid"""
+    return {"valid": True, "username": admin.get("username")}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -383,6 +471,85 @@ async def run_demo_analysis(background_tasks: BackgroundTasks):
         "count": len(opportunities),
         "opportunities": opportunities
     }
+
+
+# ============== ADMIN ENDPOINTS ==============
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(admin: Dict = Depends(get_current_admin)):
+    """Get database statistics for admin dashboard"""
+    try:
+        opportunities = await repository.get_all_opportunities() if hasattr(repository, 'get_all_opportunities') else []
+        global_startups = await repository.get_all_global_startups() if hasattr(repository, 'get_all_global_startups') else []
+        indian_startups = await repository.get_all_indian_startups() if hasattr(repository, 'get_all_indian_startups') else []
+        
+        # Count by opportunity level
+        high = sum(1 for o in opportunities if o.get('opportunity_level') == 'HIGH')
+        medium = sum(1 for o in opportunities if o.get('opportunity_level') == 'MEDIUM')
+        low = sum(1 for o in opportunities if o.get('opportunity_level') == 'LOW')
+        
+        return {
+            "opportunities_count": len(opportunities),
+            "global_startups_count": len(global_startups),
+            "indian_startups_count": len(indian_startups),
+            "opportunities_by_level": {"high": high, "medium": medium, "low": low},
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting admin stats: {e}")
+        return {
+            "opportunities_count": 0,
+            "global_startups_count": 0,
+            "indian_startups_count": 0,
+            "opportunities_by_level": {"high": 0, "medium": 0, "low": 0},
+            "error": str(e)
+        }
+
+@app.get("/api/admin/global-startups")
+async def get_global_startups(admin: Dict = Depends(get_current_admin)):
+    """Get all scraped global startups (YC, Product Hunt)"""
+    try:
+        if hasattr(repository, 'get_all_global_startups'):
+            startups = await repository.get_all_global_startups()
+            return {"count": len(startups), "startups": startups}
+        return {"count": 0, "startups": [], "message": "Global startups not available in current repository"}
+    except Exception as e:
+        logger.error(f"Error getting global startups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/indian-startups")
+async def get_indian_startups(admin: Dict = Depends(get_current_admin)):
+    """Get all Indian startups from database"""
+    try:
+        if hasattr(repository, 'get_all_indian_startups'):
+            startups = await repository.get_all_indian_startups()
+            return {"count": len(startups), "startups": startups}
+        return {"count": 0, "startups": [], "message": "Indian startups not available in current repository"}
+    except Exception as e:
+        logger.error(f"Error getting indian startups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/opportunities")
+async def get_all_opportunities_admin(admin: Dict = Depends(get_current_admin)):
+    """Get all opportunities with full details (admin only)"""
+    try:
+        opportunities = await repository.get_all_opportunities() if hasattr(repository, 'get_all_opportunities') else []
+        return {"count": len(opportunities), "opportunities": opportunities}
+    except Exception as e:
+        logger.error(f"Error getting opportunities: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/admin/opportunity/{opportunity_id}")
+async def delete_opportunity(opportunity_id: str, admin: Dict = Depends(get_current_admin)):
+    """Delete an opportunity by ID"""
+    try:
+        if hasattr(repository, 'delete_opportunity'):
+            await repository.delete_opportunity(opportunity_id)
+            return {"success": True, "message": f"Opportunity {opportunity_id} deleted"}
+        return {"success": False, "message": "Delete not supported in current repository"}
+    except Exception as e:
+        logger.error(f"Error deleting opportunity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8000):
