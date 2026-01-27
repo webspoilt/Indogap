@@ -678,7 +678,7 @@ export default function OpportunityEngine() {
                     <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center mb-4">
                       <Lightbulb className="w-8 h-8 text-emerald-600" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">Select an Opportunity</h3>
+                    <h2 className="text-lg font-semibold mb-2">Select an Opportunity</h2>
                     <p className="text-slate-700 dark:text-slate-300 mb-4 max-w-md mx-auto">
                       Choose an opportunity from the Opportunities tab to generate a comprehensive MVP roadmap tailored for the Indian market.
                     </p>
