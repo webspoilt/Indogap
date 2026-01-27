@@ -14,24 +14,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "Idea Scraper - Find Startup Opportunities in India",
+  description: "Discover untapped startup opportunities in India by analyzing global trends and identifying gaps in the Indian market.",
+  keywords: ["Idea Scraper", "Startup", "India", "Market Gap", "Opportunity Finder", "IndoGap"],
+  authors: [{ name: "IndoGap Team" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/favicon.ico",
   },
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "Idea Scraper",
+    description: "Find startup opportunities by identifying gaps in the Indian market",
+    siteName: "Idea Scraper",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    title: "Idea Scraper",
+    description: "Find startup opportunities by identifying gaps in the Indian market",
   },
 };
 
