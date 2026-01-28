@@ -9,7 +9,10 @@ import json
 import logging
 import os
 import psutil
-import GPUtil
+try:
+    import GPUtil
+except ImportError:
+    GPUtil = None
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -305,8 +308,14 @@ async def health_check():
     
     # Get system stats
     ram = psutil.virtual_memory()
-    gpus = GPUtil.getGPUs()
-    vram = (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None
+    
+    vram = None
+    if GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            vram = (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None
+        except Exception:
+            pass
     
     return HealthResponse(
         status="healthy" if ollama_available else "degraded",
@@ -322,15 +331,26 @@ async def health_check():
 async def get_system_stats():
     """Get real-time system resource usage"""
     ram = psutil.virtual_memory()
-    gpus = GPUtil.getGPUs()
+    ram = psutil.virtual_memory()
+    
+    vram_used = None
+    vram_total = None
+    
+    if GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            vram_used = (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None
+            vram_total = (gpus[0].memoryTotal / 1024) if len(gpus) > 0 else None
+        except Exception:
+            pass
     
     stats = {
         "cpu_percent": psutil.cpu_percent(),
         "ram_percent": ram.percent,
         "ram_used_gb": ram.used / (1024**3),
         "ram_total_gb": ram.total / (1024**3),
-        "vram_used_gb": (gpus[0].memoryUsed / 1024) if len(gpus) > 0 else None,
-        "vram_total_gb": (gpus[0].memoryTotal / 1024) if len(gpus) > 0 else None,
+        "vram_used_gb": vram_used,
+        "vram_total_gb": vram_total,
         "models_loaded": [],
         "timestamp": datetime.now().isoformat()
     }
