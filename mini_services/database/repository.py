@@ -61,9 +61,17 @@ class OpportunityModel(Base):
 class PostgreSQLRepository:
     """
     PostgreSQL implementation of the repository using SQLAlchemy.
+    Includes connection pooling for better performance under load.
     """
     def __init__(self, database_url: str):
-        self.engine = create_engine(database_url)
+        # Configure connection pooling to prevent connection exhaustion
+        self.engine = create_engine(
+            database_url,
+            pool_size=10,           # Number of connections to maintain
+            max_overflow=20,        # Additional connections when pool is full
+            pool_pre_ping=True,     # Test connections before use
+            pool_recycle=300        # Recycle connections after 5 minutes
+        )
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 

@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
@@ -25,6 +25,10 @@ import uvicorn
 import hashlib
 import secrets
 import time
+import aiofiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Setup logging
 logging.basicConfig(
@@ -53,11 +57,27 @@ free_api = get_free_api_client()
 # Admin Authentication Config
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+IS_DEVELOPMENT = os.getenv("ENVIRONMENT", "development").lower() == "development"
+
 if not ADMIN_PASSWORD:
-    logger.warning("⚠️ ADMIN_PASSWORD not set! Using default 'indogap2024'. Set ADMIN_PASSWORD env var for production!")
-    ADMIN_PASSWORD = "indogap2024"
-JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
+    if IS_DEVELOPMENT:
+        logger.warning("⚠️ ADMIN_PASSWORD not set! Using default for development only.")
+        ADMIN_PASSWORD = "indogap2024"
+    else:
+        raise ValueError("ADMIN_PASSWORD environment variable must be set in production!")
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    if IS_DEVELOPMENT:
+        JWT_SECRET = secrets.token_hex(32)
+        logger.warning("⚠️ JWT_SECRET not set! Generated ephemeral secret for development.")
+    else:
+        raise ValueError("JWT_SECRET environment variable must be set in production!")
+
 JWT_EXPIRY = 3600 * 24  # 24 hours
+
+# Rate limiter configuration
+limiter = Limiter(key_func=get_remote_address)
 
 # Simple token storage (in production, use Redis or database)
 active_tokens: Dict[str, Dict[str, Any]] = {}
@@ -107,12 +127,13 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
 # Load Indian competitors config
 COMPETITORS_CONFIG_PATH = Path(__file__).parent / "config" / "indian_competitors.json"
 
-def get_indian_competitors(tags: List[str] = None) -> str:
-    """Load Indian competitors from config file with category matching."""
+async def get_indian_competitors(tags: Optional[List[str]] = None) -> str:
+    """Load Indian competitors from config file with category matching (async)."""
     try:
         if COMPETITORS_CONFIG_PATH.exists():
-            with open(COMPETITORS_CONFIG_PATH, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            async with aiofiles.open(COMPETITORS_CONFIG_PATH, "r", encoding="utf-8") as f:
+                content = await f.read()
+                config = json.loads(content)
             
             # Try to match by category based on tags
             if tags and "categories" in config:
@@ -154,6 +175,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Background task for token cleanup
 async def token_cleanup_task():
@@ -229,18 +254,19 @@ class LoginResponse(BaseModel):
 # ============== AUTH ENDPOINTS ==============
 
 @app.post("/api/auth/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    """Admin login endpoint"""
-    if request.username == ADMIN_USERNAME and request.password == ADMIN_PASSWORD:
-        token = create_token(request.username)
-        logger.info(f"Admin login successful: {request.username}")
+@limiter.limit("5/minute")
+async def login(request: Request, login_data: LoginRequest):
+    """Admin login endpoint with rate limiting"""
+    if login_data.username == ADMIN_USERNAME and login_data.password == ADMIN_PASSWORD:
+        token = create_token(login_data.username)
+        logger.info(f"Admin login successful: {login_data.username}")
         return LoginResponse(
             success=True,
             token=token,
             message="Login successful",
-            username=request.username
+            username=login_data.username
         )
-    logger.warning(f"Failed login attempt for: {request.username}")
+    logger.warning(f"Failed login attempt for: {login_data.username}")
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.post("/api/auth/logout")
@@ -263,11 +289,11 @@ async def verify_auth(admin: Dict = Depends(get_current_admin)):
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
-    """Serve the dashboard HTML"""
+    """Serve the dashboard HTML (async file I/O)"""
     dashboard_path = Path(__file__).parent / "dashboard.html"
     if dashboard_path.exists():
-        with open(dashboard_path, "r", encoding="utf-8") as f:
-            return f.read()
+        async with aiofiles.open(dashboard_path, "r", encoding="utf-8") as f:
+            return await f.read()
     return "<h1>Dashboard file not found</h1>"
 
 
@@ -392,8 +418,8 @@ async def scrape_data(request: ScrapeRequest):
 async def analyze_startup(request: AnalysisRequest):
     """Analyze a startup opportunity using local AI"""
     try:
-        # Get Indian competitors from config file
-        indian_competitors = get_indian_competitors(request.tags)
+        # Get Indian competitors from config file (async)
+        indian_competitors = await get_indian_competitors(request.tags)
         
         # Use local Ollama for analysis
         result = ollama.analyze_opportunity(
@@ -578,6 +604,171 @@ async def delete_opportunity(opportunity_id: str, admin: Dict = Depends(get_curr
     except Exception as e:
         logger.error(f"Error deleting opportunity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============== EXPORT & SEARCH ENDPOINTS ==============
+
+@app.get("/api/export/opportunities")
+async def export_opportunities(
+    format: str = Query("json", description="Export format: 'json' or 'csv'"),
+    admin: Dict = Depends(get_current_admin)
+):
+    """Export all opportunities as JSON or CSV (admin only)"""
+    try:
+        opportunities = await repository.get_all_opportunities() if hasattr(repository, 'get_all_opportunities') else []
+        
+        if format.lower() == "csv":
+            import io
+            import csv
+            
+            output = io.StringIO()
+            if opportunities:
+                fieldnames = ["id", "name", "description", "source", "gap_score", 
+                             "similarity_score", "opportunity_level", "created_at"]
+                writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                for opp in opportunities:
+                    writer.writerow(opp)
+            
+            from fastapi.responses import Response
+            return Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=opportunities.csv"}
+            )
+        
+        # Default: JSON
+        return {"count": len(opportunities), "data": opportunities}
+        
+    except Exception as e:
+        logger.error(f"Error exporting opportunities: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/startups")
+async def export_startups(
+    format: str = Query("json", description="Export format: 'json' or 'csv'"),
+    source: str = Query("all", description="Source: 'global', 'indian', or 'all'"),
+    admin: Dict = Depends(get_current_admin)
+):
+    """Export startups as JSON or CSV (admin only)"""
+    try:
+        data = []
+        
+        if source in ["global", "all"]:
+            if hasattr(repository, 'get_all_global_startups'):
+                global_startups = await repository.get_all_global_startups()
+                data.extend(global_startups)
+        
+        if source in ["indian", "all"]:
+            if hasattr(repository, 'get_all_indian_startups'):
+                indian_startups = await repository.get_all_indian_startups()
+                data.extend(indian_startups)
+        
+        if format.lower() == "csv":
+            import io
+            import csv
+            
+            output = io.StringIO()
+            if data:
+                fieldnames = list(data[0].keys())
+                writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                for item in data:
+                    writer.writerow(item)
+            
+            from fastapi.responses import Response
+            return Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=startups_{source}.csv"}
+            )
+        
+        return {"count": len(data), "source": source, "data": data}
+        
+    except Exception as e:
+        logger.error(f"Error exporting startups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/search")
+async def search_opportunities(
+    q: Optional[str] = Query(None, description="Search query for name/description"),
+    min_score: float = Query(0, ge=0, le=1, description="Minimum gap score"),
+    max_score: float = Query(1, ge=0, le=1, description="Maximum gap score"),
+    level: Optional[str] = Query(None, description="Opportunity level: HIGH, MEDIUM, LOW"),
+    source: Optional[str] = Query(None, description="Source filter: yc, ph, manual"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Pagination offset")
+):
+    """Search and filter opportunities with various criteria"""
+    try:
+        # Get all opportunities
+        all_opportunities = await repository.get_all_opportunities() if hasattr(repository, 'get_all_opportunities') else []
+        
+        # Apply filters
+        filtered = all_opportunities
+        
+        # Text search
+        if q:
+            q_lower = q.lower()
+            filtered = [
+                opp for opp in filtered
+                if q_lower in opp.get("name", "").lower() or 
+                   q_lower in opp.get("description", "").lower()
+            ]
+        
+        # Score filters
+        filtered = [
+            opp for opp in filtered
+            if min_score <= opp.get("gap_score", 0) <= max_score
+        ]
+        
+        # Level filter
+        if level:
+            filtered = [opp for opp in filtered if opp.get("opportunity_level") == level.upper()]
+        
+        # Source filter
+        if source:
+            filtered = [opp for opp in filtered if opp.get("source") == source.lower()]
+        
+        # Pagination
+        total = len(filtered)
+        filtered = filtered[offset:offset + limit]
+        
+        return {
+            "total": total,
+            "count": len(filtered),
+            "offset": offset,
+            "limit": limit,
+            "query": q,
+            "filters": {"min_score": min_score, "max_score": max_score, "level": level, "source": source},
+            "results": filtered
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching opportunities: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/cache/stats")
+async def get_cache_stats(admin: Dict = Depends(get_current_admin)):
+    """Get cache statistics (admin only)"""
+    try:
+        from mini_services.cache import cache
+        return cache.get_stats()
+    except ImportError:
+        return {"error": "Cache module not available"}
+
+
+@app.post("/api/cache/clear")
+async def clear_cache(admin: Dict = Depends(get_current_admin)):
+    """Clear all cached data (admin only)"""
+    try:
+        from mini_services.cache import cache
+        cache.clear()
+        return {"success": True, "message": "Cache cleared"}
+    except ImportError:
+        return {"error": "Cache module not available"}
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8000):
