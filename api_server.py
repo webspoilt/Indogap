@@ -51,11 +51,30 @@ from mini_services.scrapers.product_hunt import ProductHuntScraper
 from mini_services.database.repository import get_repository
 from mini_services.config import get_settings
 
-# Initialize components
-settings = get_settings()
-repository = get_repository()
-ollama = get_ollama_client()
-free_api = get_free_api_client()
+# Initialize components placeholders
+settings = None
+repository = None
+ollama = None
+free_api = None
+
+def init_components():
+    """Lazy initialize components"""
+    global settings, repository, ollama, free_api
+    try:
+        settings = get_settings()
+        repository = get_repository()
+        ollama = get_ollama_client()
+        free_api = get_free_api_client()
+        logger.info("Components initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize components: {e}")
+
+# Initialize immediately for local dev, but defer for Vercel/tests if needed
+# We'll call this in startup event too to be safe
+try:
+    init_components()
+except Exception:
+    pass
 
 # Admin Authentication Config
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -193,6 +212,7 @@ async def token_cleanup_task():
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks on app startup"""
+    init_components()  # Ensure components are ready
     asyncio.create_task(token_cleanup_task())
     logger.info("Started token cleanup background task")
 
@@ -303,7 +323,8 @@ async def serve_dashboard():
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Check system health and available models"""
-    ollama_available = ollama.is_available()
+    if not ollama: init_components()
+    ollama_available = ollama.is_available() if ollama else False
     models = ollama.list_models() if ollama_available else []
     
     # Get system stats
@@ -361,7 +382,8 @@ async def get_system_stats():
 @app.get("/api/models")
 async def list_models():
     """List available Ollama models"""
-    return {"models": ollama.list_models()}
+    if not ollama: init_components()
+    return {"models": ollama.list_models() if ollama else []}
 
 
 @app.post("/api/scrape")
@@ -383,18 +405,20 @@ async def scrape_data(request: ScrapeRequest):
                     results.append(storage_data)
                     # Save to DB if possible
                     try:
-                        await repository.store_global_startup({
-                            "id": item.get("id") or str(uuid4()),
-                            "name": item.get("name", "Unknown"),
-                            "description": item.get("description", ""),
-                            "short_description": item.get("short_description", ""),
-                            "tags": item.get("tags", []),
-                            "website": item.get("website"),
-                            "source": "yc",
-                            "batch": item.get("batch"),
-                            "funding_stage": item.get("funding_stage"),
-                            "funding_amount": item.get("funding_amount"),
-                        })
+                        if not repository: init_components()
+                        if repository:
+                            await repository.store_global_startup({
+                                "id": item.get("id") or str(uuid4()),
+                                "name": item.get("name", "Unknown"),
+                                "description": item.get("description", ""),
+                                "short_description": item.get("short_description", ""),
+                                "tags": item.get("tags", []),
+                                "website": item.get("website"),
+                                "source": "yc",
+                                "batch": item.get("batch"),
+                                "funding_stage": item.get("funding_stage"),
+                                "funding_amount": item.get("funding_amount"),
+                            })
                     except Exception as e:
                         logger.error(f"Failed to store scraped item: {e}")
         
@@ -438,6 +462,10 @@ async def scrape_data(request: ScrapeRequest):
 async def analyze_startup(request: AnalysisRequest):
     """Analyze a startup opportunity using local AI"""
     try:
+        if not ollama: init_components()
+        if not ollama:
+            raise HTTPException(status_code=503, detail="AI service not available")
+            
         # Get Indian competitors from config file (async)
         indian_competitors = await get_indian_competitors(request.tags)
         
@@ -462,7 +490,9 @@ async def analyze_startup(request: AnalysisRequest):
             "analysis": result,
             "created_at": datetime.now()
         }
-        await repository.store_opportunity(opportunity)
+        if not repository: init_components()
+        if repository:
+            await repository.store_opportunity(opportunity)
         
         return result
         
@@ -474,6 +504,10 @@ async def analyze_startup(request: AnalysisRequest):
 async def generate_mvp(request: MVPRequest):
     """Generate MVP specification using local AI"""
     try:
+        if not ollama: init_components()
+        if not ollama:
+            raise HTTPException(status_code=503, detail="AI service not available")
+
         spec = ollama.generate_mvp_spec(
             startup_name=request.startup_name,
             description=request.description,
@@ -494,7 +528,8 @@ async def generate_mvp(request: MVPRequest):
 @app.get("/api/opportunities")
 async def get_opportunities():
     """Get all analyzed opportunities"""
-    return repository.get_all_opportunities()
+    if not repository: init_components()
+    return repository.get_all_opportunities() if repository else []
 
 
 @app.post("/api/demo")
