@@ -71,10 +71,8 @@ def init_components():
 
 # Initialize immediately for local dev, but defer for Vercel/tests if needed
 # We'll call this in startup event too to be safe
-try:
-    init_components()
-except Exception:
-    pass
+# REMOVED eager init to fix Vercel timeouts
+
 
 # Admin Authentication Config
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -618,6 +616,7 @@ async def get_admin_stats(admin: Dict = Depends(get_current_admin)):
 async def get_global_startups(admin: Dict = Depends(get_current_admin)):
     """Get all scraped global startups (YC, Product Hunt)"""
     try:
+        if not repository: init_components()
         if hasattr(repository, 'get_all_global_startups'):
             startups = await repository.get_all_global_startups()
             return {"count": len(startups), "startups": startups}
@@ -630,6 +629,7 @@ async def get_global_startups(admin: Dict = Depends(get_current_admin)):
 async def get_indian_startups(admin: Dict = Depends(get_current_admin)):
     """Get all Indian startups from database"""
     try:
+        if not repository: init_components()
         if hasattr(repository, 'get_all_indian_startups'):
             startups = await repository.get_all_indian_startups()
             return {"count": len(startups), "startups": startups}
