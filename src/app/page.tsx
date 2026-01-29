@@ -89,8 +89,7 @@ export default function OpportunityEngine() {
   const [analyzing, setAnalyzing] = useState(false)
   const [generatingMVP, setGeneratingMVP] = useState(false)
   const [selectedMVP, setSelectedMVP] = useState<any>(null)
-  const [generatingMVP, setGeneratingMVP] = useState(false)
-  const [selectedMVP, setSelectedMVP] = useState<any>(null)
+
   const [bulkAnalyzing, setBulkAnalyzing] = useState(false)
   const [isScrapeOpen, setIsScrapeOpen] = useState(false)
   const [scraping, setScraping] = useState(false)
