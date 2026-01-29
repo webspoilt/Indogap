@@ -394,6 +394,20 @@ class YCombinatorScraper(BaseScraper):
             if desc_elem:
                 details['long_description'] = desc_elem.get_text(strip=True)
             
+            # Extract external website
+            # Look for links that are not YC internal links
+            website_links = soup.find_all('a', href=re.compile(r'^https?://'))
+            for link in website_links:
+                href = link.get('href', '')
+                # Skip YC, social media, and common footer links
+                if 'ycombinator.com' not in href and \
+                   'twitter.com' not in href and \
+                   'linkedin.com' not in href and \
+                   'facebook.com' not in href and \
+                   'instagram.com' not in href:
+                    details['website'] = href
+                    break
+            
             # Extract additional metadata
             meta_elems = soup.find_all(['meta', 'span', 'div'], 
                                        class_=re.compile(r'meta|info', re.I))
