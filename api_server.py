@@ -456,6 +456,108 @@ async def scrape_data(request: ScrapeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class BulkAnalyzeRequest(BaseModel):
+    limit: int = Field(default=5, ge=1, le=20)
+    source: Optional[str] = None
+
+
+@app.post("/api/analyze/bulk")
+async def bulk_analyze(request: BulkAnalyzeRequest, background_tasks: BackgroundTasks):
+    """
+    Bulk analyze pending startups from global sources.
+    This runs in the background to avoid timeouts.
+    """
+    try:
+        if not repository: init_components()
+        if not ollama: init_components()
+        
+        if not ollama or not repository:
+            raise HTTPException(status_code=503, detail="Services not available")
+
+        # Get all global startups
+        # In a real app, we would have a specific query for unanalyzed items
+        all_startups = await repository.get_all_global_startups() if hasattr(repository, 'get_all_global_startups') else []
+        
+        # Filter for unanalyzed ones
+        pending = [s for s in all_startups if not s.get("analyzed")]
+        
+        if request.source:
+            pending = [s for s in pending if s.get("source") == request.source]
+            
+        # Specific sorting/prioritizing logic could go here
+        
+        # Limit batch size
+        to_process = pending[:request.limit]
+        
+        if not to_process:
+            return {"message": "No pending startups to analyze", "count": 0}
+
+        # Add to background tasks
+        background_tasks.add_task(process_bulk_analysis, to_process)
+        
+        return {
+            "message": f"Started background analysis for {len(to_process)} startups",
+            "count": len(to_process),
+            "queued_items": [s.get("name") for s in to_process]
+        }
+        
+    except Exception as e:
+        logger.error(f"Bulk analyze failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def process_bulk_analysis(startups: List[Dict[str, Any]]):
+    """Background task to process multiple startups"""
+    logger.info(f"Starting bulk analysis for {len(startups)} items")
+    
+    # Get Indian competitors once
+    indian_competitors = await get_indian_competitors()
+    
+    for startup in startups:
+        try:
+            logger.info(f"Analyzing {startup.get('name')}...")
+            
+            # Analyze
+            result = ollama.analyze_opportunity(
+                startup_name=startup.get("name", ""),
+                description=startup.get("description", "") or startup.get("short_description", ""),
+                tags=startup.get("tags", []),
+                indian_competitors=indian_competitors
+            )
+            
+            gap_score = result.get("gap_score", 0.5)
+            
+            # Create opportunity
+            opportunity = {
+                "id": f"opp_{startup.get('id')}_{int(datetime.now().timestamp())}",
+                "name": startup.get("name"),
+                "description": startup.get("description"),
+                "source": startup.get("source", "bulk"),
+                "gap_score": gap_score,
+                "similarity_score": 1 - gap_score,
+                "opportunity_level": "HIGH" if gap_score >= 0.7 else "MEDIUM" if gap_score >= 0.4 else "LOW",
+                "analysis": result,
+                "created_at": datetime.now()
+            }
+            
+            # Store opportunity
+            await repository.store_opportunity(opportunity)
+            
+            # Mark startup as analyzed
+            # We strictly need to update the analyzed flag in the DB
+            startup["analyzed"] = 1
+            await repository.store_global_startup(startup)
+            
+            # Small delay to be nice to the LLM
+            await asyncio.sleep(1)
+            
+        except Exception as e:
+            logger.error(f"Failed to analyze {startup.get('name')}: {e}")
+
+    logger.info("Bulk analysis completed")
+
+
+
 @app.post("/api/analyze")
 async def analyze_startup(request: AnalysisRequest):
     """Analyze a startup opportunity using local AI"""

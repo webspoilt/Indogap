@@ -89,34 +89,36 @@ export default function OpportunityEngine() {
   const [analyzing, setAnalyzing] = useState(false)
   const [generatingMVP, setGeneratingMVP] = useState(false)
   const [selectedMVP, setSelectedMVP] = useState<any>(null)
+  const [generatingMVP, setGeneratingMVP] = useState(false)
+  const [selectedMVP, setSelectedMVP] = useState<any>(null)
+  const [bulkAnalyzing, setBulkAnalyzing] = useState(false)
+  const [isScrapeOpen, setIsScrapeOpen] = useState(false)
+  const [scraping, setScraping] = useState(false)
+
+  const fetchStats = async () => {
+    try {
+      const [oppsRes, startupsRes] = await Promise.all([
+        fetch('/api/opportunities'),
+        fetch('/api/indian-startups')
+      ])
+
+      if (oppsRes.ok) {
+        const data = await oppsRes.json()
+        setOpportunities(data)
+      }
+
+      if (startupsRes.ok) {
+        const data = await startupsRes.json()
+        setIndianStartups(data)
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    }
+  }
 
   // Fetch data from APIs
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [oppsRes, startupsRes] = await Promise.all([
-          fetch('/api/opportunities'),
-          fetch('/api/indian-startups')
-        ])
-
-        if (oppsRes.ok) {
-          const data = await oppsRes.json()
-          setOpportunities(data)
-        }
-
-        if (startupsRes.ok) {
-          const data = await startupsRes.json()
-          setIndianStartups(data)
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
+    fetchStats().then(() => setLoading(false))
   }, [])
 
   const filteredOpportunities = opportunities.filter(opp => {
@@ -232,6 +234,60 @@ export default function OpportunityEngine() {
       console.error('Error generating MVP:', error)
     } finally {
       setGeneratingMVP(false)
+    }
+  }
+
+  const handleBulkAnalyze = async () => {
+    if (!confirm('Start bulk analysis for pending startups? This runs in the background.')) return
+
+    setBulkAnalyzing(true)
+    try {
+      const response = await fetch('/api/analyze/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 5 })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        alert(result.message)
+        // Refresh opportunities after a short delay
+        setTimeout(fetchStats, 2000)
+      } else {
+        const error = await response.text()
+        alert('Bulk analyze failed: ' + error)
+      }
+    } catch (error) {
+      console.error('Error during bulk analysis:', error)
+      alert('Failed to start bulk analysis')
+    } finally {
+      setBulkAnalyzing(false)
+    }
+  }
+
+  const handleScrape = async (source: string) => {
+    setScraping(true)
+    try {
+      const response = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, limit: 10 })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        alert(`Scraping complete! Found ${result.count} items.`)
+        setTimeout(fetchStats, 1000)
+        setIsScrapeOpen(false)
+      } else {
+        const error = await response.text()
+        alert('Scraping failed: ' + error)
+      }
+    } catch (error) {
+      console.error('Error scraping:', error)
+      alert('Failed to start scraping')
+    } finally {
+      setScraping(false)
     }
   }
 
@@ -354,10 +410,57 @@ export default function OpportunityEngine() {
                     </div>
                   </DialogContent>
                 </Dialog>
+
+                <Dialog open={isScrapeOpen} onOpenChange={setIsScrapeOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Download className="w-4 h-4" />
+                      Scrape Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Scrape New Startups</DialogTitle>
+                      <DialogDescription>
+                        Fetch latest companies from global sources to analyze.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <Button
+                        onClick={() => handleScrape('yc')}
+                        disabled={scraping}
+                        className="w-full justify-between"
+                        variant="outline"
+                      >
+                        <span>Y Combinator (Latest Batch)</span>
+                        {scraping ? <div className="animate-spin text-xl">⟳</div> : <ExternalLink className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        onClick={() => handleScrape('ph')}
+                        disabled={scraping}
+                        className="w-full justify-between"
+                        variant="outline"
+                      >
+                        <span>Product Hunt (Trending)</span>
+                        {scraping ? <div className="animate-spin text-xl">⟳</div> : <ExternalLink className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <ThemeToggle />
                 <Button size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700">
                   <Plus className="w-4 h-4" />
                   Add Opportunity
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleBulkAnalyze}
+                  disabled={bulkAnalyzing}
+                  className="gap-2 bg-blue-600 hover:bg-blue-700"
+                >
+                  <Zap className="w-4 h-4" />
+                  {bulkAnalyzing ? 'Analyzing...' : 'Bulk Analyze'}
                 </Button>
               </div>
             </div>

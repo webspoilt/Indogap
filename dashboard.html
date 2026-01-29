@@ -171,6 +171,10 @@
                         <div class="font-semibold">Scrape Product Hunt</div>
                         <div class="text-sm text-slate-400">Trending products</div>
                     </button>
+                    <button onclick="bulkAnalyze()" class="p-4 rounded bg-green-700 hover:bg-green-600 text-left">
+                        <div class="font-semibold">Bulk Analyze</div>
+                        <div class="text-sm text-slate-200">Process pending startups</div>
+                    </button>
                 </div>
             </div>
         </section>
@@ -443,6 +447,40 @@
 
         async function scrapePH() {
             await scrapeSource('ph');
+        }
+
+        async function bulkAnalyze() {
+            if (!confirm('Start bulk analysis for pending startups? This runs in the background.')) return;
+
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="font-semibold">Starting...</div>';
+
+            try {
+                const response = await fetch(API_URL + '/api/analyze/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 5 })
+                });
+                const result = await response.json();
+
+                alert(result.message);
+
+                // Show notification or visual feedback
+                if (result.count > 0) {
+                    btn.innerHTML = `<div class="font-semibold">Analyzing ${result.count}...</div><div class="text-xs text-slate-200">Check logs</div>`;
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        loadDashboard(); // Refresh stats
+                    }, 5000);
+                } else {
+                    btn.innerHTML = originalText;
+                }
+
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.innerHTML = originalText;
+            }
         }
 
         // Analyze
